@@ -1,4 +1,4 @@
-# 🔍 SMILES-2026 Hallucination Detection
+# 🔍 Hallucination Detection
 
 Detect whether a small language
 model's answer is *hallucinated* (fabricated) or *truthful* using the model's
@@ -21,7 +21,7 @@ It fits comfortably on a free Google Colab T4 GPU.
 ## Repository Structure
 
 ```
-SMILES-HALLUCINATION-DETECTION/
+HALLUCINATION-DETECTION/
 ├── data/
 │   ├── dataset.csv        # Labelled training data (prompt, response, label)
 │   └── test.csv           # Unlabelled competition test set
@@ -44,30 +44,73 @@ SMILES-HALLUCINATION-DETECTION/
 
 ## Quick Start
 
-### Google Colab
-
-Open the terminal in Colab and run:
-
-```python
-git clone https://github.com/ahdr3w/SMILES-HALLUCINATION-DETECTION.git
-cd SMILES-HALLUCINATION-DETECTION
-pip install -r requirements.txt
-python solution.py
-```
-
-### Local Setup
+### Setup with uv
 
 ```bash
-git clone https://github.com/ahdr3w/SMILES-HALLUCINATION-DETECTION.git
-cd SMILES-HALLUCINATION-DETECTION
+uv sync
+uv run python solution.py
+```
 
+### Setup with pip
+
+```bash
 python -m venv .venv
-source .venv/bin/activate        # Linux / macOS
-# .venv\Scripts\activate.bat     # Windows
-
-pip install -r requirements.txt
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 python solution.py
 ```
+
+CUDA is recommended. Running on CPU is possible, but hidden-state extraction is
+slow.
+
+### Reproducing Experiments
+
+The default command runs the final selected solution:
+
+```bash
+python solution.py
+```
+
+Stable ablations can be reproduced by setting environment variables:
+
+```bash
+SMILES_EXPERIMENT_VARIANT=baseline_last_token python solution.py
+SMILES_EXPERIMENT_VARIANT=final_last_token_lr python solution.py
+SMILES_EXPERIMENT_VARIANT=final python solution.py
+SMILES_EXPERIMENT_VARIANT=tail_no_second python solution.py
+SMILES_EXPERIMENT_VARIANT=tail_with_geometry python solution.py
+SMILES_EXPERIMENT_VARIANT=tail_minmax python solution.py
+SMILES_EXPERIMENT_VARIANT=tail_with_var python solution.py
+```
+
+Threshold calibration can also be changed:
+
+```bash
+SMILES_THRESHOLD_MODE=auto python solution.py
+SMILES_THRESHOLD_MODE=train_prior python solution.py
+SMILES_THRESHOLD_MODE=accuracy python solution.py
+```
+
+For repeated cross-validation:
+
+```bash
+SMILES_SPLIT_REPEATS=3 python solution.py
+```
+
+For a context-grouped diagnostic split:
+
+```bash
+SMILES_SPLIT_MODE=context_group python solution.py
+```
+
+Report illustrations can be regenerated from cached experiment artifacts with:
+
+```bash
+python scripts/make_report_artifacts.py
+```
+
+The script writes draft plots/tables under `docs/report_artifacts/`. The final
+figures used in `SOLUTION.md` are stored separately in `figures/`.
 
 ## Dataset
 
@@ -121,23 +164,38 @@ Results are averaged across folds (if using k-fold) and saved to
 `results.json`.
 
 
-# What is expected from the applicant of SMILES-2026 ?
+[//]: # (# What is expected from the applicant of SMILES-2026 ?)
 
-**Q1:** What must the applicant submit in the application form ?<br>
-**A1:** Submit: 
-1. A link to your Github repository
-2. A link to your `predictions.csv` publicly available file on some cloud storage
+[//]: # ()
+[//]: # (**Q1:** What must the applicant submit in the application form ?<br>)
 
-**Q2:** What the applicants must include in the repository ?<br>
-**A2:** Your repository must contain: 
-1. `results.json` - produced by the official `solution.py`
-2. Report file in Markdown format `SOLUTION.md`. 
+[//]: # (**A1:** Submit: )
 
-**Q3:** Report requirements (`SOLUTION.md`)<br>
-**A3:** Your report must include:<br>
-- Reproducibility instructions: exact commands to run your solution and acquire the same `predictions.csv`, required environment (if any), any important implementation details needed to reproduce your result.
-- Final solution description: What components you modified ? What your final approach is ? Why you made these choices ? What contributed most to improving the metric ?
-- Experiments and failed attempts: What ideas you tried but did not include in the final solution ? Why they did not work or were discarded ?
+[//]: # (1. A link to your Github repository)
 
-**Q4:** Reproducibility<br>
-**A4:** The repository must be self-contained and runnable with the provided `solution.py` file. Your solution must not require changes to the fixed infrastructure files. Running `solution.py` must generate your submitted `predictions.csv`.
+[//]: # (2. A link to your `predictions.csv` publicly available file on some cloud storage)
+
+[//]: # ()
+[//]: # (**Q2:** What the applicants must include in the repository ?<br>)
+
+[//]: # (**A2:** Your repository must contain: )
+
+[//]: # (1. `results.json` - produced by the official `solution.py`)
+
+[//]: # (2. Report file in Markdown format `SOLUTION.md`. )
+
+[//]: # ()
+[//]: # (**Q3:** Report requirements &#40;`SOLUTION.md`&#41;<br>)
+
+[//]: # (**A3:** Your report must include:<br>)
+
+[//]: # (- Reproducibility instructions: exact commands to run your solution and acquire the same `predictions.csv`, required environment &#40;if any&#41;, any important implementation details needed to reproduce your result.)
+
+[//]: # (- Final solution description: What components you modified ? What your final approach is ? Why you made these choices ? What contributed most to improving the metric ?)
+
+[//]: # (- Experiments and failed attempts: What ideas you tried but did not include in the final solution ? Why they did not work or were discarded ?)
+
+[//]: # ()
+[//]: # (**Q4:** Reproducibility<br>)
+
+[//]: # (**A4:** The repository must be self-contained and runnable with the provided `solution.py` file. Your solution must not require changes to the fixed infrastructure files. Running `solution.py` must generate your submitted `predictions.csv`.)

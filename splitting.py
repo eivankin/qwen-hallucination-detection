@@ -1,24 +1,43 @@
 """
-splitting.py — Train / validation / test split utilities (student-implementable).
+splitting.py — reproducible CV splits for the SMILES probe.
 
-``split_data`` receives the label array ``y`` and, optionally, the full
-DataFrame ``df`` (for group-aware splits).  It must return a list of
-``(idx_train, idx_val, idx_test)`` tuples of integer index arrays.
-
-Contract
---------
-* ``idx_train``, ``idx_val``, ``idx_test`` are 1-D NumPy arrays of integer
-  indices into the full dataset.
-* ``idx_val`` may be ``None`` if no separate validation fold is needed.
-* All indices must be non-overlapping; together they must cover every sample.
-* Return a **list** — one element for a single split, K elements for k-fold.
+Default behavior is 5-fold stratified CV with a small validation carve-out from
+each training side for threshold tuning.  Set ``SMILES_SPLIT_REPEATS`` to a
+larger integer when producing final robustness tables for ``SOLUTION.md``.
+Set ``SMILES_SPLIT_MODE=context_group`` for a leakage-aware diagnostic split by
+source context.
 """
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold, train_test_split
+
+
+def _extract_context(prompt: str) -> str:
+    marker = "Given the context, answer the question in a single brief but complete sentence."
+    if marker in prompt:
+        prompt = prompt.split(marker, 1)[1]
+    end_marker = "Note that your answer"
+    if end_marker in prompt:
+        return prompt.split(end_marker, 1)[0].strip()
+    question_marker = "Here is the question:"
+    if question_marker in prompt:
+        return prompt.split(question_marker, 1)[0].strip()
+    return str(prompt).strip()
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    value = int(raw)
+    if value < 1:
+        raise ValueError(f"{name} must be >= 1, got {value}.")
+    return value
 
 
 def split_data(
@@ -28,43 +47,57 @@ def split_data(
     val_size: float = 0.15,
     random_state: int = 42,
 ) -> list[tuple[np.ndarray, np.ndarray | None, np.ndarray]]:
-    """Split dataset indices into train, validation, and test subsets.
+    """Return stratified train/validation/test folds.
 
-    The default strategy performs a single stratified random split preserving
-    the class ratio in each subset.
-
-    Args:
-        y:            Label array of shape ``(N,)`` with values in ``{0, 1}``.
-                      Used for stratification.
-        df:           Optional full DataFrame (same row order as ``y``).
-                      Required for group-aware splits.
-        test_size:    Fraction of samples reserved for the held-out test set.
-        val_size:     Fraction of samples reserved for validation.
-        random_state: Random seed for reproducible splits.
-
-    Returns:
-        A list of ``(idx_train, idx_val, idx_test)`` tuples of integer index
-        arrays.  ``idx_val`` may be ``None``.
-
-    Student task:
-        Replace or extend the skeleton below.  The only contract is that the
-        function returns the list described above.
+    Args are kept compatible with the starter template.  ``test_size`` is not
+    used by the default k-fold splitter because each fold acts as the held-out
+    local test split; ``val_size`` controls the threshold-tuning carve-out from
+    the fold's training side.
     """
+    del test_size
 
+    y = np.asarray(y, dtype=np.int32)
     idx = np.arange(len(y))
+    n_splits = min(_env_int("SMILES_N_FOLDS", 5), int(np.bincount(y).min()))
+    n_repeats = _env_int("SMILES_SPLIT_REPEATS", 1)
+    if n_splits < 2:
+        idx_train, idx_test = train_test_split(
+            idx,
+            test_size=0.2,
+            random_state=random_state,
+            stratify=y,
+        )
+        return [(idx_train, None, idx_test)]
 
-    idx_train_val, idx_test = train_test_split(
-        idx,
-        test_size=test_size,
-        random_state=random_state,
-        stratify=y,
-    )
-    relative_val = val_size / (1.0 - test_size)
-    idx_train, idx_val = train_test_split(
-        idx_train_val,
-        test_size=relative_val,
-        random_state=random_state,
-        stratify=y[idx_train_val],
-    )
-    return [(idx_train, idx_val, idx_test)]
+    splits: list[tuple[np.ndarray, np.ndarray | None, np.ndarray]] = []
+    split_mode = os.getenv("SMILES_SPLIT_MODE", "stratified").strip().lower()
+    for repeat in range(n_repeats):
+        seed = random_state + repeat
+        if split_mode == "stratified":
+            cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+            fold_iter = cv.split(idx, y)
+        elif split_mode == "context_group":
+            if df is None or "prompt" not in df.columns:
+                raise ValueError("SMILES_SPLIT_MODE=context_group requires df['prompt'].")
+            groups = df["prompt"].map(_extract_context).to_numpy()
+            cv = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+            fold_iter = cv.split(idx, y, groups=groups)
+        else:
+            raise ValueError(
+                f"Unknown SMILES_SPLIT_MODE={split_mode!r}. "
+                "Expected 'stratified' or 'context_group'."
+            )
 
+        for idx_train_val, idx_test in fold_iter:
+            train_val_indices = idx[idx_train_val]
+            if val_size <= 0:
+                splits.append((train_val_indices, None, idx[idx_test]))
+                continue
+            idx_train, idx_val = train_test_split(
+                train_val_indices,
+                test_size=val_size,
+                random_state=seed,
+                stratify=y[train_val_indices],
+            )
+            splits.append((idx_train, idx_val, idx[idx_test]))
+    return splits
