@@ -7,8 +7,6 @@ __pycache__/
 predictions.csv
 
 # Results
-results.json
-*.json
 artifacts/
 docs/report_artifacts/
 
