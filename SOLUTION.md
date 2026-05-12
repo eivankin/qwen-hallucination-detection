@@ -2,7 +2,13 @@
 
 ## Reproducibility
 
-The final solution is run through the original entrypoint:
+The final solution is run the same way as the original templtate. First, setup the dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Then run the original script:
 
 ```bash
 python solution.py
