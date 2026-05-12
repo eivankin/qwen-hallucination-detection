@@ -2,7 +2,7 @@
 
 ## Reproducibility
 
-The final solution is run the same way as the original templtate. First, setup the dependencies:
+The final solution is run the same way as the original template. First, setup the dependencies:
 
 ```bash
 pip install -r requirements.txt
